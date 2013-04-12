@@ -1,0 +1,10 @@
+development:
+  adapter: postgresql
+  database: friends_invader_development
+  encoding: utf8
+  min_messages: warning
+test:
+  adapter: postgresql
+  database: friends_invader_test
+  encoding: utf8
+  min_messages: warning
