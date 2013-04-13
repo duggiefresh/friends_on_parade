@@ -1,3 +1,3 @@
-FriendsInvader::Application.routes.draw do
+FriendsOnParade::Application.routes.draw do
   root to: 'application#index'
 end

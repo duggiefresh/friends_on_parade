@@ -4,4 +4,4 @@
 
 require File.expand_path('../config/application', __FILE__)
 
-FriendsInvader::Application.load_tasks
+FriendsOnParade::Application.load_tasks
