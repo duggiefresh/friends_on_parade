@@ -25,11 +25,11 @@ end
 group :test do
   gem 'capybara'
   gem 'capybara_minitest_spec'
-  gem 'poltergeist'
+  gem 'database_cleaner'
   gem 'm'
   gem 'minitest'
-  gem 'minitest-spec-rails'
   gem 'minitest-matchers'
   gem 'minitest-reporters'
+  gem 'poltergeist'
   gem 'valid_attribute'
 end

@@ -12,11 +12,4 @@ describe Account do
     it { must have_valid(:email).when('cat@dog.com', 'doug@college.edu') }
     it { wont have_valid(:email).when('', 'bad@email@something.com', nil) }
   end
-  #TODO: valid time attributes
-  context 'Profile information:' do
-    it { must have_valid(:birthday).when() }
-    it { wont have_valid(:birthday).when() }
-    it { must have_valid(:join_date).when() }
-    it { must have_valid(:join_date).when() }
-  end
 end
