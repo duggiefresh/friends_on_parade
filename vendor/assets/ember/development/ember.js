@@ -151,8 +151,8 @@ Ember.deprecateFunc = function(message, func) {
 
 })();
 
-// Version: v1.0.0-rc.2-108-gbfa769c
-// Last commit: bfa769c (2013-04-12 11:37:38 -0700)
+// Version: v1.0.0-rc.2-140-g77799f6
+// Last commit: 77799f6 (2013-04-17 19:06:24 -0700)
 
 
 (function() {
@@ -2773,8 +2773,6 @@ var notifyObservers = function(obj, keyName) {
 var META_KEY = Ember.META_KEY,
     MANDATORY_SETTER = Ember.ENV.MANDATORY_SETTER,
     IS_GLOBAL = /^([A-Z$]|([0-9][A-Z$]))/,
-    propertyWillChange = Ember.propertyWillChange,
-    propertyDidChange = Ember.propertyDidChange,
     getPath = Ember._getPath;
 
 /**
@@ -3234,7 +3232,6 @@ function isProto(pvalue) {
 // value for the key then the node won't actually watch it. For a root node
 // pass null for parent and key and object for value.
 var ChainNode = Ember._ChainNode = function(parent, key, value) {
-  var obj;
   this._parent = parent;
   this._key    = key;
 
@@ -4344,7 +4341,6 @@ Ember.computed.alias = function(dependentKey) {
 */
 Ember.computed.defaultTo = function(defaultPath) {
   return Ember.computed(function(key, newValue, cachedValue) {
-    var result;
     if (arguments.length === 1) {
       return cachedValue != null ? cachedValue : get(this, defaultPath);
     }
@@ -6817,7 +6813,7 @@ define("container",
       var factory = factoryFor(container, fullName);
 
       var splitName = fullName.split(":"),
-          type = splitName[0], name = splitName[1],
+          type = splitName[0],
           value;
 
       if (option(container, fullName, 'instantiate') === false) {
@@ -7226,7 +7222,8 @@ Ember.String = {
     ```
 
     @method fmt
-    @param {Object...} [args]
+    @param {String} str The string to format
+    @param {Array} formats An array of parameters to interpolate into string.
     @return {String} formatted string
   */
   fmt: function(str, formats) {
@@ -10136,6 +10133,15 @@ Ember.Observable = Ember.Mixin.create(/** @scope Ember.Observable.prototype */ {
 var get = Ember.get, set = Ember.set;
 
 /**
+`Ember.TargetActionSupport` is a mixin that can be included in a class
+to add a `triggerAction` method with semantics similar to the Handlebars
+`{{action}}` helper. In normal Ember usage, the `{{action}}` helper is
+usually the best choice. This mixin is most often useful when you are
+doing more complex event handling in View objects.
+
+See also `Ember.ViewTargetActionSupport`, which has
+view-aware defaults for target and actionContext.
+
 @class TargetActionSupport
 @namespace Ember
 @extends Ember.Mixin
@@ -10143,6 +10149,7 @@ var get = Ember.get, set = Ember.set;
 Ember.TargetActionSupport = Ember.Mixin.create({
   target: null,
   action: null,
+  actionContext: null,
 
   targetObject: Ember.computed(function() {
     var target = get(this, 'target');
@@ -10156,21 +10163,86 @@ Ember.TargetActionSupport = Ember.Mixin.create({
     }
   }).property('target'),
 
-  triggerAction: function() {
-    var action = get(this, 'action'),
-        target = get(this, 'targetObject');
+  actionContextObject: Ember.computed(function() {
+    var actionContext = get(this, 'actionContext');
+
+    if (Ember.typeOf(actionContext) === "string") {
+      var value = get(this, actionContext);
+      if (value === undefined) { value = get(Ember.lookup, actionContext); }
+      return value;
+    } else {
+      return actionContext;
+    }
+  }).property('actionContext'),
+
+  /**
+  Send an "action" with an "actionContext" to a "target". The action, actionContext
+  and target will be retrieved from properties of the object. For example:
+
+  ```javascript
+  App.SaveButtonView = Ember.View.extend(Ember.TargetActionSupport, {
+    target: Ember.computed.alias('controller'),
+    action: 'save',
+    actionContext: Ember.computed.alias('context'),
+    click: function(){
+      this.triggerAction(); // Sends the `save` action, along with the current context
+                            // to the current controller
+    }
+  });
+  ```
+
+  The `target`, `action`, and `actionContext` can be provided as properties of
+  an optional object argument to `triggerAction` as well.
+
+  ```javascript
+  App.SaveButtonView = Ember.View.extend(Ember.TargetActionSupport, {
+    click: function(){
+      this.triggerAction({
+        action: 'save',
+        target: this.get('controller'),
+        actionContext: this.get('context'),
+      }); // Sends the `save` action, along with the current context
+          // to the current controller
+    }
+  });
+  ```
+
+  The `actionContext` defaults to the object you mixing `TargetActionSupport` into.
+  But `target` and `action` must be specified either as properties or with the argument
+  to `triggerAction`, or a combination:
+
+  ```javascript
+  App.SaveButtonView = Ember.View.extend(Ember.TargetActionSupport, {
+    target: Ember.computed.alias('controller'),
+    click: function(){
+      this.triggerAction({
+        action: 'save'
+      }); // Sends the `save` action, along with a reference to `this`,
+          // to the current controller
+    }
+  });
+  ```
+
+  @method triggerAction
+  @param opts {Hash} (optional, with the optional keys action, target and/or actionContext)
+  @return {Boolean} true if the action was sent successfully and did not return false
+  */
+  triggerAction: function(opts) {
+    opts = opts || {};
+    var action = opts['action'] || get(this, 'action'),
+        target = opts['target'] || get(this, 'targetObject'),
+        actionContext = opts['actionContext'] || get(this, 'actionContextObject') || this;
 
     if (target && action) {
       var ret;
 
-      if (typeof target.send === 'function') {
-        ret = target.send(action, this);
+      if (target.send) {
+        ret = target.send.apply(target, [action, actionContext]);
       } else {
-        if (typeof action === 'string') {
-          action = target[action];
-        }
-        ret = action.call(target, this);
+        Ember.assert("The action '" + action + "' did not exist on " + target, typeof target[action] === 'function');
+        ret = target[action].apply(target, [actionContext]);
       }
+
       if (ret !== false) ret = true;
 
       return ret;
@@ -14312,6 +14384,15 @@ ViewCollection.prototype = {
     }
   },
 
+  invokeRecursively: function(fn) {
+    var views = this.views, view;
+
+    for (var i = 0, l = views.length; i < l; i++) {
+      view = views[i];
+      fn.call(view, view);
+    }
+  },
+
   transitionTo: function(state, children) {
     var views = this.views;
     for (var i = 0, l = views.length; i < l; i++) {
@@ -15397,7 +15478,7 @@ Ember.View = Ember.CoreView.extend(
     @param {Ember.RenderBuffer} buffer
   */
   _applyAttributeBindings: function(buffer, attributeBindings) {
-    var attributeValue, elem, type;
+    var attributeValue, elem;
 
     a_forEach(attributeBindings, function(binding) {
       var split = binding.split(':'),
@@ -16118,7 +16199,6 @@ Ember.View = Ember.CoreView.extend(
   */
   destroy: function() {
     var childViews = this._childViews,
-        parent = this._parentView,
         // get parentView before calling super because it'll be destroyed
         nonVirtualParentView = get(this, 'parentView'),
         viewName = this.viewName,
@@ -17693,6 +17773,69 @@ Ember.CollectionView.CONTAINER_MAP = {
 
 
 (function() {
+/**
+`Ember.ViewTargetActionSupport` is a mixin that can be included in a
+view class to add a `triggerAction` method with semantics similar to
+the Handlebars `{{action}}` helper. It provides intelligent defaults
+for the action's target: the view's controller; and the context that is
+sent with the action: the view's context.
+
+Note: In normal Ember usage, the `{{action}}` helper is usually the best
+choice. This mixin is most often useful when you are doing more complex
+event handling in custom View subclasses.
+
+For example:
+
+```javascript
+App.SaveButtonView = Ember.View.extend(Ember.ViewTargetActionSupport, {
+  action: 'save',
+  click: function(){
+    this.triggerAction(); // Sends the `save` action, along with the current context
+                          // to the current controller
+  }
+});
+```
+
+The `action` can be provided as properties of an optional object argument
+to `triggerAction` as well.
+
+```javascript
+App.SaveButtonView = Ember.View.extend(Ember.ViewTargetActionSupport, {
+  click: function(){
+    this.triggerAction({
+      action: 'save'
+    }); // Sends the `save` action, along with the current context
+        // to the current controller
+  }
+});
+```
+
+@class ViewTargetActionSupport
+@namespace Ember
+@extends Ember.TargetActionSupport
+*/
+Ember.ViewTargetActionSupport = Ember.Mixin.create(Ember.TargetActionSupport, {
+  /**
+  @property target
+  */
+  target: Ember.computed.alias('controller'),
+  /**
+  @property actionContext
+  */
+  actionContext: Ember.computed.alias('context')
+});
+
+})();
+
+
+
+(function() {
+
+})();
+
+
+
+(function() {
 /*globals jQuery*/
 /**
 Ember Views
@@ -18683,6 +18826,7 @@ Ember.Handlebars.registerBoundHelper = function(name, fn) {
 
   Renders the unbound form of an otherwise bound helper function.
 
+  @method evaluateMultiPropertyBoundHelper
   @param {Function} fn
   @param {Object} context
   @param {Array} normalizedProperties
@@ -18699,7 +18843,7 @@ function evaluateMultiPropertyBoundHelper(context, fn, normalizedProperties, opt
 
   bindView = new Ember._SimpleHandlebarsView(null, null, !hash.unescaped, data);
   bindView.normalizedValue = function() {
-    var args = [], value, boundOption;
+    var args = [], boundOption;
 
     // Copy over bound options.
     for (boundOption in boundOptions) {
@@ -18744,6 +18888,7 @@ function evaluateMultiPropertyBoundHelper(context, fn, normalizedProperties, opt
 
   Renders the unbound form of an otherwise bound helper function.
 
+  @method evaluateUnboundHelper
   @param {Function} fn
   @param {Object} context
   @param {Array} normalizedProperties
@@ -18882,13 +19027,18 @@ var DOMManager = {
       var buffer = view.renderToBuffer();
 
       view.invokeRecursively(function(view) {
-        view.propertyDidChange('element');
+        view.propertyWillChange('element');
       });
-
       view.triggerRecursively('willInsertElement');
+
       morph.replaceWith(buffer.string());
       view.transitionTo('inDOM');
+
+      view.invokeRecursively(function(view) {
+        view.propertyDidChange('element');
+      });
       view.triggerRecursively('didInsertElement');
+
       notifyMutationListeners();
     });
   },
@@ -18996,6 +19146,8 @@ SimpleHandlebarsView.prototype = {
     }
     this.morph = null;
   },
+
+  propertyWillChange: Ember.K,
 
   propertyDidChange: Ember.K,
 
@@ -19704,7 +19856,7 @@ EmberHandlebars.registerHelper('unless', function(context, options) {
   Results in the following rendered output:
 
   ```html
-  <img class=":class-name-to-always-apply">
+  <img class="class-name-to-always-apply">
   ```
 
   All three strategies - string return value, boolean return value, and
@@ -20043,11 +20195,8 @@ EmberHandlebars.ViewHelper = Ember.Object.create({
   },
 
   helper: function(thisContext, path, options) {
-    var inverse = options.inverse,
-        data = options.data,
-        view = data.view,
+    var data = options.data,
         fn = options.fn,
-        hash = options.hash,
         newView;
 
     if ('string' === typeof path) {
@@ -20061,7 +20210,7 @@ EmberHandlebars.ViewHelper = Ember.Object.create({
 
     var viewOptions = this.propertiesFromHTMLOptions(options, thisContext);
     var currentView = data.view;
-    viewOptions.templateData = options.data;
+    viewOptions.templateData = data;
     var newViewProto = newView.proto ? newView.proto() : newView;
 
     if (fn) {
@@ -20442,8 +20591,6 @@ Ember.Handlebars.registerHelper('collection', function(path, options) {
     }
   }
 
-  var tagName = hash.tagName || collectionPrototype.tagName;
-
   if (fn) {
     itemHash.template = fn;
     delete options.fn;
@@ -20464,8 +20611,6 @@ Ember.Handlebars.registerHelper('collection', function(path, options) {
   if(!hash.keyword){
     itemHash._context = Ember.computed.alias('content');
   }
-
-  var viewString = view.toString();
 
   var viewOptions = Ember.Handlebars.ViewHelper.propertiesFromHTMLOptions({ data: data, hash: itemHash }, this);
   hash.itemViewClass = itemViewClass.extend(viewOptions);
@@ -21843,7 +21988,7 @@ Ember.SelectOption = Ember.View.extend({
   Interacting with the rendered element by selecting the first option
   ('Yehuda') will update the `selectedPerson` value of `App.controller`
   to match the content object of the newly selected `<option>`. In this
-  case it is the first object in the `App.content.content`
+  case it is the first object in the `App.controller.content`
 
   ### Supplying a Prompt
 
@@ -22838,16 +22983,10 @@ define("router",
       * `{String} handler`: A handler name
       * `{Object} params`: A hash of recognized parameters
 
-      ## `UnresolvedHandlerInfo`
-
-      * `{Boolean} isDynamic`: whether a handler has any dynamic segments
-      * `{String} name`: the name of a handler
-      * `{Object} context`: the active context for the handler
-
       ## `HandlerInfo`
 
       * `{Boolean} isDynamic`: whether a handler has any dynamic segments
-      * `{String} name`: the original unresolved handler name
+      * `{String} name`: the name of a handler
       * `{Object} handler`: a handler object
       * `{Object} context`: the active context for the handler
     */
@@ -22894,8 +23033,7 @@ define("router",
         @return {Array} an Array of `[handler, parameter]` tuples
       */
       handleURL: function(url) {
-        var results = this.recognizer.recognize(url),
-            objects = [];
+        var results = this.recognizer.recognize(url);
 
         if (!results) {
           throw new Error("No route matched the URL '" + url + "'");
@@ -22991,7 +23129,7 @@ define("router",
             toSetup = [],
             startIdx = handlers.length,
             objectsToMatch = objects.length,
-            object, objectChanged, handlerObj, handler, names, i, len;
+            object, objectChanged, handlerObj, handler, names, i;
 
         // Find out which handler to start matching at
         for (i=handlers.length-1; i>=0 && objectsToMatch>0; i--) {
@@ -23002,11 +23140,11 @@ define("router",
         }
 
         if (objectsToMatch > 0) {
-          throw "More objects were passed than dynamic segments";
+          throw "More context objects were passed than there are dynamic segments for the route: "+handlerName;
         }
 
         // Connect the objects to the routes
-        for (i=0, len=handlers.length; i<len; i++) {
+        for (i=0; i<handlers.length; i++) {
           handlerObj = handlers[i];
           handler = this.getHandler(handlerObj.handler);
           names = handlerObj.names;
@@ -23051,10 +23189,22 @@ define("router",
 
           toSetup.push({
             isDynamic: !!handlerObj.names.length,
-            handler: handlerObj.handler,
-            name: handlerObj.name,
+            name: handlerObj.handler,
+            handler: handler,
             context: object
           });
+
+          if (i === handlers.length - 1) {
+            var lastHandler = toSetup[toSetup.length - 1],
+                additionalHandler;
+
+            if (additionalHandler = lastHandler.handler.additionalHandler) {
+              handlers.push({
+                handler: additionalHandler.call(lastHandler.handler),
+                names: []
+              });
+            }
+          }
         }
 
         return { params: params, toSetup: toSetup };
@@ -23064,7 +23214,7 @@ define("router",
         var contexts = [].slice.call(arguments, 1);
 
         var currentHandlerInfos = this.currentHandlerInfos,
-            found = false, names, object, handlerInfo, handlerObj;
+            found = false, object, handlerInfo;
 
         for (var i=currentHandlerInfos.length-1; i>=0; i--) {
           handlerInfo = currentHandlerInfos[i];
@@ -23193,9 +23343,21 @@ define("router",
     */
     function collectObjects(router, results, index, objects) {
       if (results.length === index) {
-        loaded(router);
-        setupContexts(router, objects);
-        return;
+        var lastObject = objects[objects.length - 1],
+            lastHandler = lastObject && lastObject.handler;
+
+        if (lastHandler && lastHandler.additionalHandler) {
+          var additionalResult = {
+            handler: lastHandler.additionalHandler(),
+            params: {},
+            isDynamic: false
+          };
+          results.push(additionalResult);
+        } else {
+          loaded(router);
+          setupContexts(router, objects);
+          return;
+        }
       }
 
       var result = results[index];
@@ -23220,7 +23382,8 @@ define("router",
 
         var updatedObjects = objects.concat([{
           context: value,
-          handler: result.handler,
+          name: result.handler,
+          handler: router.getHandler(result.handler),
           isDynamic: result.isDynamic
         }]);
         collectObjects(router, results, index + 1, updatedObjects);
@@ -23230,8 +23393,9 @@ define("router",
     /**
       @private
 
-      Takes an Array of `UnresolvedHandlerInfo`s, resolves the handler names
-      into handlers, and then figures out what to do with each of the handlers.
+      Takes an Array of `HandlerInfo`s, figures out which ones are
+      exiting, entering, or changing contexts, and calls the
+      proper handler hooks.
 
       For example, consider the following tree of handlers. Each handler is
       followed by the URL segment it handles.
@@ -23265,11 +23429,9 @@ define("router",
          4. Triggers the `setup` callback on `about`
 
       @param {Router} router
-      @param {Array[UnresolvedHandlerInfo]} handlerInfos
+      @param {Array[HandlerInfo]} handlerInfos
     */
     function setupContexts(router, handlerInfos) {
-      resolveHandlers(router, handlerInfos);
-
       var partition =
         partitionHandlers(router.currentHandlerInfos || [], handlerInfos);
 
@@ -23297,7 +23459,7 @@ define("router",
         }
       });
 
-      if (router.didTransition) {
+      if (!aborted && router.didTransition) {
         router.didTransition(handlerInfos);
       }
     }
@@ -23318,28 +23480,6 @@ define("router",
             context = handlerInfo.context;
 
         callback(handler, context);
-      }
-    }
-
-    /**
-      @private
-
-      Updates the `handler` field in each element in an Array of
-      `UnresolvedHandlerInfo`s from a handler name to a resolved handler.
-
-      When done, the Array will contain `HandlerInfo` structures.
-
-      @param {Router} router
-      @param {Array[UnresolvedHandlerInfo]} handlerInfos
-    */
-    function resolveHandlers(router, handlerInfos) {
-      var handlerInfo;
-
-      for (var i=0, l=handlerInfos.length; i<l; i++) {
-        handlerInfo = handlerInfos[i];
-
-        handlerInfo.name = handlerInfo.handler;
-        handlerInfo.handler = router.getHandler(handlerInfo.handler);
       }
     }
 
@@ -23443,6 +23583,7 @@ define("router",
     }
     return Router;
   });
+
 
 })();
 
@@ -23650,11 +23791,6 @@ Ember.Router = Ember.Object.extend({
   },
 
   didTransition: function(infos) {
-    // Don't do any further action here if we redirected
-    for (var i=0, l=infos.length; i<l; i++) {
-      if (infos[i].handler.redirected) { return; }
-    }
-
     var appController = this.container.lookup('controller:application'),
         path = routePath(infos);
 
@@ -23916,9 +24052,16 @@ Ember.Route = Ember.Object.extend({
     @param {String} name the name of the route
     @param {...Object} models the
   */
-  transitionTo: function() {
-    if (this._checkingRedirect) { this.redirected = true; }
-    return this.router.transitionTo.apply(this.router, arguments);
+  transitionTo: function(name, context) {
+    var router = this.router;
+
+    // If the transition is a no-op, just bail.
+    if (router.isActive.apply(router, arguments)) {
+      return;
+    }
+
+    if (this._checkingRedirect) { this._redirected[this._redirectDepth] = true; }
+    return router.transitionTo.apply(router, arguments);
   },
 
   /**
@@ -23930,13 +24073,29 @@ Ember.Route = Ember.Object.extend({
     @param {...Object} models the
   */
   replaceWith: function() {
-    if (this._checkingRedirect) { this.redirected = true; }
+    var router = this.router;
+
+    // If the transition is a no-op, just bail.
+    if (router.isActive.apply(router, arguments)) {
+      return;
+    }
+
+    if (this._checkingRedirect) { this._redirected[this._redirectDepth] = true; }
     return this.router.replaceWith.apply(this.router, arguments);
   },
 
   send: function() {
     return this.router.send.apply(this.router, arguments);
   },
+
+  /**
+   @private
+
+   Internal counter for tracking whether a route handler has
+   called transitionTo or replaceWith inside its redirect hook.
+
+  */
+  _redirectDepth: 0,
 
   /**
     @private
@@ -23946,17 +24105,57 @@ Ember.Route = Ember.Object.extend({
     @method setup
   */
   setup: function(context) {
-    this.redirected = false;
-    this._checkingRedirect = true;
+    // Determine if this is the top-most transition.
+    // If so, we'll set up a data structure to track
+    // whether `transitionTo` or replaceWith gets called
+    // inside our `redirect` hook.
+    //
+    // This is necessary because we set a flag on the route
+    // inside transitionTo/replaceWith to determine afterwards
+    // if they were called, but `setup` can be called
+    // recursively and we need to disambiguate where in the
+    // call stack the redirect happened.
 
+    // Are we the first call to setup? If so, set up the
+    // redirect tracking data structure, and remember that
+    // we're the top-most so we can clean it up later.
+    var isTop;
+    if (!this._redirected) {
+      isTop = true;
+      this._redirected = [];
+    }
+
+    // Set a flag on this route saying that we are interested in
+    // tracking redirects, and increment the depth count.
+    this._checkingRedirect = true;
+    var depth = ++this._redirectDepth;
+
+    // Check to see if context is set. This check preserves
+    // the correct arguments.length inside the `redirect` hook.
     if (context === undefined) {
       this.redirect();
     } else {
       this.redirect(context);
     }
 
+    // After the call to `redirect` returns, decrement the depth count.
+    this._redirectDepth--;
     this._checkingRedirect = false;
-    if (this.redirected) { return false; }
+
+    // Save off the data structure so we can reset it on the route but
+    // still reference it later in this method.
+    var redirected = this._redirected;
+
+    // If this is the top `setup` call in the call stack, clear the
+    // redirect tracking data structure.
+    if (isTop) { this._redirected = null; }
+
+    // If we were redirected, there is nothing left for us to do.
+    // Returning false tells router.js not to continue calling setup
+    // on any children route handlers.
+    if (redirected[depth]) {
+      return false;
+    }
 
     var controller = this.controllerFor(this.routeName, context);
 
@@ -24008,6 +24207,8 @@ Ember.Route = Ember.Object.extend({
     @private
 
     Called when the context is changed by router.js.
+
+    @method contextDidChange
   */
   contextDidChange: function() {
     this.currentModel = this.context;
@@ -26415,8 +26616,12 @@ var Application = Ember.Application = Ember.Namespace.extend(Ember.DeferredMixin
   },
 
   reset: function() {
-    get(this, '__container__').destroy();
+    Ember.run(get(this,'__container__'), 'destroy');
+
     this.buildContainer();
+
+    this._readinessDeferrals = 1;
+    this.$(this.rootElement).removeClass('ember-application');
 
     Ember.run.schedule('actions', this, function(){
       this._initialize();
@@ -26628,6 +26833,7 @@ Ember.Application.reopenClass({
   This allows the application to register default injections in the container
   that could be overridden by the normal naming convention.
 
+  @method resolverFor
   @param {Ember.Namespace} namespace the namespace to look for classes
   @return {*} the resolved value for a given lookup
 */
@@ -28011,8 +28217,8 @@ Ember States
 
 
 })();
-// Version: v1.0.0-rc.2-108-gbfa769c
-// Last commit: bfa769c (2013-04-12 11:37:38 -0700)
+// Version: v1.0.0-rc.2-140-g77799f6
+// Last commit: 77799f6 (2013-04-17 19:06:24 -0700)
 
 
 (function() {
