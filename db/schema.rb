@@ -16,10 +16,11 @@ ActiveRecord::Schema.define(:version => 20130412210954) do
   create_table "accounts", :force => true do |t|
     t.string   "first_name"
     t.string   "last_name"
+    t.string   "username"
     t.string   "email"
-    t.string   "hometown"
+    t.string   "state"
+    t.string   "city"
     t.date     "birthday"
-    t.date     "join_date"
     t.datetime "created_at", :null => false
     t.datetime "updated_at", :null => false
   end

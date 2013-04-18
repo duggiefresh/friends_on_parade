@@ -3,10 +3,11 @@ class CreateAccounts < ActiveRecord::Migration
     create_table :accounts do |t|
       t.string :first_name
       t.string :last_name
+      t.string :username
       t.string :email
-      t.string :hometown
+      t.string :state
+      t.string :city
       t.date   :birthday
-      t.date   :join_date
       t.timestamps
     end
   end
