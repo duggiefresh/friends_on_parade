@@ -1,6 +1,6 @@
 FriendsOnParade.Router.map ->
   @route 'home',
-    path: '/'
+    path: '/home'
 
   @route 'about',
     path: '/about'
