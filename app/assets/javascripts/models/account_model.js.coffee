@@ -1,18 +1,21 @@
-App.Account = DS.Model.extend
+FriendsOnParade.Account = DS.Model.extend
   id:         DS.attr 'number'
-  first_name: DS.attr 'string'
-  last_name:  DS.attr 'string'
+  firstName: DS.attr 'string'
+  lastName:  DS.attr 'string'
   username:   DS.attr 'string'
   email:      DS.attr 'string'
   city:       DS.attr 'string'
   state:      DS.attr 'string'
   birthday:   DS.attr 'date'
 
+  fullName: ->
+    @get('firstName') + ' ' + @get('lastName')
+    .property('firstName', 'lastName')
 
-App.Account.FIXTURES = [
+FriendsOnParade.Account.FIXTURES = [
   id:         1
-  first_name: 'Doug'
-  last_name:  'Example'
+  firstName: 'Doug'
+  lastName:  'Example'
   username:   'dougexample'
   email:      'doug@example.com'
   city:       'Boston'
@@ -20,8 +23,8 @@ App.Account.FIXTURES = [
   birthday:   new Date()
 ,
   id:         2
-  first_name: 'Cat'
-  last_name:  'Dog'
+  firstName: 'Cat'
+  lastName:  'Dog'
   username:   'catdog'
   email:      'cat@dog.com'
   city:       'Boston'

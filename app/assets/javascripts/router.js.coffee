@@ -4,3 +4,6 @@ FriendsOnParade.Router.map ->
 
   @route 'about',
     path: '/about'
+
+  @route 'account',
+    path: '/account'
